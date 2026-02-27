@@ -43,6 +43,7 @@ def register_student(request):
             user = form.save(commit=False)
             user.is_student = True
             user.save()
+            # Create a StudentData profile immediately for the new user
             StudentData.objects.create(student=user)
             login(request, user)
             messages.success(request, "Account created! Initializing Biometrics...")
@@ -65,6 +66,8 @@ def face_login(request):
 
     while True:
         ret, frame = video_capture.read()
+        if not ret: break
+        
         rgb_frame = frame[:, :, ::-1]
         face_locations = face_recognition.face_locations(rgb_frame)
         face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
@@ -97,23 +100,29 @@ def face_login(request):
 
 @login_required
 def student_dash(request):
-    """Dashboard with Progress Bar calculation."""
+    """Dashboard with Progress Bar calculation (Cleaned up duplicates)."""
+    # Fetch data safely using .filter().first()
     data = StudentData.objects.filter(student=request.user).first()
     materials = Material.objects.all()
     live_class = LiveSession.objects.filter(is_active=True).first()
     
-    # Calculate Progress Percentage
-    progress = 33 
-    if data and data.face_encoding:
-        progress += 33
-    if data and data.attendance > 0:
-        progress += 34
+    # Logic for progress bar calculation
+    progress = 25 # Initial progress for account creation
+    if data:
+        if data.face_encoding:
+            progress += 35 # Extra for face registration
+        if data.attendance > 0:
+            progress += 40 # Extra for attending class
+            
+    # Cap at 100%
+    progress = min(progress, 100)
         
     return render(request, 'core/student_dash.html', {
         'data': data, 
         'materials': materials, 
         'live_class': live_class,
-        'progress': progress
+        'progress': progress,
+        'user': request.user
     })
 
 @login_required
@@ -121,16 +130,26 @@ def teacher_dash(request):
     if not request.user.is_teacher: return redirect('login')
     if request.method == "POST":
         if 'meeting_link' in request.POST:
-            LiveSession.objects.update_or_create(id=1, defaults={'meeting_link': request.POST.get('meeting_link'), 'is_active': True})
+            LiveSession.objects.update_or_create(id=1, defaults={
+                'meeting_link': request.POST.get('meeting_link'), 
+                'is_active': True,
+                'title': "Live Class"
+            })
             messages.success(request, "Live session link updated!")
         elif 'title' in request.POST:
-            Material.objects.create(title=request.POST.get('title'), file=request.FILES.get('file'), video_link=request.POST.get('video_url'), teacher=request.user)
+            Material.objects.create(
+                title=request.POST.get('title'), 
+                file=request.FILES.get('file'), 
+                video_link=request.POST.get('video_url'), 
+                teacher=request.user
+            )
             messages.success(request, "Material uploaded!")
         return redirect('teacher_dash')
     return render(request, 'core/teacher_dash.html', {'students': StudentData.objects.all()})
 
 @login_required
 def admin_dashboard(request):
+    """Note: Ensure your URL points here for 'admin_dash' name."""
     if not request.user.is_staff:
         messages.error(request, "Admins Only!")
         return redirect('login')
@@ -158,6 +177,8 @@ def register_face(request):
     encoding = None
     while True:
         ret, frame = video_capture.read()
+        if not ret: break
+        
         rgb_frame = frame[:, :, ::-1]
         face_locations = face_recognition.face_locations(rgb_frame)
         if face_locations:
@@ -170,7 +191,8 @@ def register_face(request):
         cv2.imshow("Initial Biometric Enrollment", frame)
         key = cv2.waitKey(1)
         if key & 0xFF == ord('s') and encoding is not None:
-            student_data = StudentData.objects.get(student=request.user)
+            # Update existing data profile
+            student_data, created = StudentData.objects.get_or_create(student=request.user)
             student_data.face_encoding = pickle.dumps(encoding)
             student_data.save()
             messages.success(request, "Biometrics saved! Welcome to the Academy.")
@@ -195,6 +217,8 @@ def verify_for_class(request):
     
     for _ in range(80):
         ret, frame = video_capture.read()
+        if not ret: break
+        
         rgb_frame = frame[:, :, ::-1]
         face_locations = face_recognition.face_locations(rgb_frame)
         face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
@@ -225,7 +249,8 @@ def verify_for_class(request):
 def update_marks(request, student_id):
     if request.method == "POST":
         sr = get_object_or_404(StudentData, id=student_id)
-        sr.marks, sr.attendance = int(request.POST.get('marks')), float(request.POST.get('attendance'))
+        sr.marks = int(request.POST.get('marks', 0))
+        sr.attendance = float(request.POST.get('attendance', 0.0))
         sr.save()
         messages.success(request, "Records Updated.")
     return redirect('teacher_dash')
@@ -244,11 +269,14 @@ def submit_assignment(request):
 
 @login_required
 def view_submissions(request):
+    """View for teachers to see student uploads."""
     if not request.user.is_teacher: return redirect('login')
-    return render(request, 'core/view_submissions.html', {'submissions': AssignmentSubmission.objects.all().order_by('-submitted_at')})
+    submissions = AssignmentSubmission.objects.all().order_by('-submitted_at')
+    return render(request, 'core/view_submissions.html', {'submissions': submissions})
 
 @login_required
 def reset_face_id(request, student_id):
+    """Admin tool to clear biometric data."""
     if not request.user.is_staff:
         messages.error(request, "Unauthorized.")
         return redirect('login')
@@ -256,4 +284,4 @@ def reset_face_id(request, student_id):
     student_record.face_encoding = None
     student_record.save()
     messages.success(request, f"Biometric data for {student_record.student.username} reset.")
-    return redirect('admin_dash')
+    return redirect('admin_dashboard')

@@ -20,8 +20,13 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
+    # 1. Django Admin Panel
     path('admin/', admin.site.urls),
-    path('', include('core.urls')), # This connects your core app
+
+    # 2. Link to your 'core' app's URLs
+    path('', include('core.urls')), 
 ]
+
+# 3. Serve Media Files (PDFs, Face ID images) during development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

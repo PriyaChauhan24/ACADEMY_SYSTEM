@@ -13,7 +13,7 @@
             color: white; 
             padding-top: 20px; 
             position: fixed; 
-            width: 16.66%; /* Matches col-md-2 */
+            width: 16.66%; 
             left: 0;
             top: 0;
             z-index: 1000;
@@ -21,13 +21,17 @@
         .sidebar a { color: white; text-decoration: none; display: block; padding: 12px 20px; transition: 0.2s; }
         .sidebar a:hover { background: #34495e; padding-left: 25px; }
         
-        /* Main Content Offset */
         .main-content { margin-left: 16.66%; } 
 
         .card-custom { border-radius: 15px; border: none; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         .card-custom:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
         
-        .pulse-dot { animation: pulse-red 2s infinite; }
+        /* Updated: CSS Variable usage prevents VS Code Diagnostics errors */
+        .progress-bar { 
+            width: var(--pg-width, 0%); 
+        }
+
+        .pulse-dot { animation: pulse-red 2s infinite; border-radius: 50%; display: inline-block; width: 8px; height: 8px; background-color: #dc3545; }
         @keyframes pulse-red {
             0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
             70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
@@ -57,43 +61,54 @@
             <div class="card shadow-sm border-0 mb-4 p-3" style="border-radius: 12px;">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="mb-0 fw-bold">Profile Completion Status</h6>
-                    <span class="badge {% if progress == 100 %}bg-success{% else %}bg-warning text-dark{% endif %}">
-                        {% if progress == 100 %}🛡️ Verified Profile{% else %}⚠️ Action Required{% endif %}
+                    <span class="badge {% if progress >= 100 %}bg-success{% else %}bg-warning text-dark{% endif %}">
+                        {% if progress >= 100 %}🛡️ Verified Profile{% else %}⚠️ Action Required{% endif %}
                     </span>
                 </div>
                 <div class="progress" style="height: 10px; border-radius: 10px;">
                     <div class="progress-bar progress-bar-striped progress-bar-animated 
                         {% if progress < 40 %}bg-danger{% elif progress < 70 %}bg-warning{% else %}bg-success{% endif %}" 
-                        style="width: {{ progress }}%;">
+                        role="progressbar" 
+                        style="--pg-width: {{ progress|default:0 }}%;" 
+                        aria-valuenow="{{ progress|default:0 }}" 
+                        aria-valuemin="0" 
+                        aria-valuemax="100">
                     </div>
                 </div>
             </div>
 
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h2 class="mb-0 fw-bold">Welcome, {{ user.username }}!</h2>
-                    <p class="text-muted small">ID: {{ user.enrollment_number|default:"N/A" }}</p>
+                    <h1>Welcome, {{ user.first_name }}</h1>
+                    <p>Enrollment: {{ user.username }}</p>
                 </div>
-                <div class="text-end text-success small fw-bold">
+                {% if live_class %}
+                <div class="text-danger small fw-bold">
+                    <span class="pulse-dot me-1"></span> LIVE CLASS ACTIVE
+                    <a href="{% url 'verify_for_class' %}" class="btn btn-sm btn-outline-danger ms-2 rounded-pill shadow-sm">Join Now</a>
+                </div>
+                {% else %}
+                <div class="text-success small fw-bold">
                     <i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i> System Online
                 </div>
+                {% endif %}
             </div>
 
             <div class="row g-4 mb-5">
                 <div class="col-md-4">
-                    <div class="card card-custom shadow-sm p-4 bg-white text-center">
+                    <div class="card card-custom shadow-sm p-4 bg-white text-center h-100">
                         <h6 class="text-muted text-uppercase small fw-bold mb-3">Attendance</h6>
                         <div style="position: relative; height: 160px; width: 160px; margin: 0 auto;">
                             <canvas id="attendanceCircleChart"></canvas>
                             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                                <h3 class="mb-0 fw-bold">{{ data.attendance|default:"0" }}%</h3>
+                                <h3 class="mb-0 fw-bold">{{ data.attendance|default:0|floatformat:0 }}%</h3>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="col-md-4">
-                    <div class="card card-custom shadow-sm p-4 bg-white text-center">
+                    <div class="card card-custom shadow-sm p-4 bg-white text-center h-100">
                         <h6 class="text-muted text-uppercase small fw-bold mb-3">Marks Overview</h6>
                         <div style="height: 160px; width: 100%;">
                             <canvas id="marksBarChart"></canvas>
@@ -102,16 +117,16 @@
                 </div>
 
                 <div class="col-md-4">
-                    <div class="card card-custom shadow-sm p-4 bg-white">
-                        <h6 class="text-muted text-uppercase small fw-bold mb-3">Tasks</h6>
-                        <div class="d-flex align-items-center">
+                    <div class="card card-custom shadow-sm p-4 bg-white h-100">
+                        <h6 class="text-muted text-uppercase small fw-bold mb-3">Quick Actions</h6>
+                        <div class="d-flex align-items-center mb-3">
                             <i class="bi bi-journal-text text-primary fs-1 me-3"></i>
                             <div>
-                                <p class="mb-0 fw-bold">3 Assignments</p>
-                                <small class="text-muted">Due this week</small>
+                                <p class="mb-0 fw-bold">Assignment Portal</p>
+                                <small class="text-muted">Upload your work here</small>
                             </div>
                         </div>
-                        <a href="{% url 'submit_assignment' %}" class="btn btn-primary btn-sm w-100 mt-4 rounded-pill">Submit Now</a>
+                        <a href="{% url 'submit_assignment' %}" class="btn btn-primary btn-sm w-100 rounded-pill mt-auto">Submit Now</a>
                     </div>
                 </div>
             </div>
@@ -143,6 +158,10 @@
                                 {% endif %}
                             </td>
                         </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="text-center py-4 text-muted">No materials available yet.</td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -155,37 +174,54 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    // Attendance Chart
-    const attendanceVal = {{ data.attendance|default:"0" }};
-    new Chart(document.getElementById('attendanceCircleChart'), {
-        type: 'doughnut',
-        data: {
-            datasets: [{
-                data: [attendanceVal, 100 - attendanceVal],
-                backgroundColor: [attendanceVal < 40 ? '#dc3545' : '#1cc88a', '#f0f0f0'],
-                borderWidth: 0, cutout: '85%', borderRadius: 10
-            }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-    });
+    const attendanceVal = parseInt("{{ data.attendance|default:0 }}");
+    const marksVal = parseInt("{{ data.marks|default:0 }}");
 
-    // Marks Chart
-    const marksVal = {{ data.marks|default:"0" }};
-    new Chart(document.getElementById('marksBarChart'), {
-        type: 'bar',
-        data: {
-            labels: ['Marks'],
-            datasets: [{
-                data: [marksVal],
-                backgroundColor: '#0d6efd', borderRadius: 10, barThickness: 40
-            }]
-        },
-        options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, max: 100, grid: { display: false } }, x: { grid: { display: false } } }
-        }
-    });
+    const ctxAttendance = document.getElementById('attendanceCircleChart');
+    if (ctxAttendance) {
+        new Chart(ctxAttendance, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [attendanceVal, Math.max(0, 100 - attendanceVal)],
+                    backgroundColor: [attendanceVal < 40 ? '#dc3545' : '#1cc88a', '#e9ecef'],
+                    borderWidth: 0, 
+                    cutout: '85%', 
+                    borderRadius: 10
+                }]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { legend: { display: false }, tooltip: { enabled: false } } 
+            }
+        });
+    }
+
+    const ctxMarks = document.getElementById('marksBarChart');
+    if (ctxMarks) {
+        new Chart(ctxMarks, {
+            type: 'bar',
+            data: {
+                labels: ['Latest Score'],
+                datasets: [{
+                    data: [marksVal],
+                    backgroundColor: '#0d6efd', 
+                    borderRadius: 8, 
+                    barThickness: 45
+                }]
+            },
+            options: {
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { 
+                    y: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } }, 
+                    x: { grid: { display: false } } 
+                }
+            }
+        });
+    }
 </script>
 </body>
 </html>
